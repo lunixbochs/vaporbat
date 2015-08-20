@@ -1,0 +1,107 @@
+import re
+import struct
+
+proto_mask = 0x80000000
+
+def generate_struct(properties):
+    mapping = {
+        'byte': 'B',
+        'int': 'i',
+        'long': 'q',
+        'short': 'h',
+        'uint': 'I',
+        'ulong': 'Q',
+        'ushort': 'H',
+    }
+    types = []
+    byte_re = re.compile(r'byte<(\d+)>')
+    for prop, fmt, default in properties:
+        if fmt in mapping:
+            types.append(mapping[fmt])
+        else:
+            byte_match = byte_re.match(fmt)
+            if byte_match:
+                num = byte_match.group(1)
+                types.append('{}s'.format(num))
+                continue
+
+            print 'unknown format: {}'.format(fmt)
+
+    return struct.Struct('<'+''.join(types))
+
+class Enum(object):
+    class EnumMeta(type):
+        def __getattr__(cls, name):
+            constants = object.__getattribute__(cls, 'constants')
+            if name in constants:
+                return constants[name]
+            elif name not in ('constants', 'EnumMeta'):
+                return object.__getattribute__(cls, name)
+
+    __metaclass__ = EnumMeta
+    constants = {}
+
+class Message(Enum):
+    properties = ()
+    struct = None
+
+    @classmethod
+    def dumps(cls, obj):
+        if not cls.struct:
+            raise NotImplementedError
+
+        values = []
+        for prop, fmt, default in cls.properties:
+            if hasattr(obj, 'get'):
+                value = obj.get(prop, default)
+            elif hasattr(obj, prop):
+                value = getattr(obj, prop)
+            else:
+                value = default
+
+            values.append(value)
+
+        return cls.struct.pack(*values)
+
+    @classmethod
+    def loads(cls, s):
+        if not cls.struct:
+            raise NotImplementedError
+
+        obj = {}
+        values = cls.struct.unpack(s)
+        for i in xrange(len(cls.properties)):
+            prop, fmt, default = cls.properties[i]
+            obj[prop] = values[i]
+
+        return obj
+
+{% for t in types -%}
+{%- if t.type == 'enum' -%}
+class {{ t.name }}(Enum):
+{%- elif t.type == 'class' -%}
+class {{ t.name }}(Message):
+{%- endif %}
+    {% if t.constants -%}
+    constants = {
+    {%- for item in t.constants -%}
+        {%- if item[0] == 'None' %}
+        'none': {{ item[1] }},
+        {%- else %}
+        '{{ item[0] }}': {{ item[1] }},
+        {%- endif -%}
+    {% endfor %}
+    }
+    {% endif -%}
+
+    {% if t.properties -%}
+    properties = (
+        {%- for prop in t['properties'] %}
+        ('{{ prop[0] }}', '{{ prop[1] }}', {{ prop[2] }}),
+        {%- endfor %}
+    )
+    struct = generate_struct(properties)
+    {% elif not t.constants -%}
+    pass
+    {% endif %}
+{% endfor %}

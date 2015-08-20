@@ -1,0 +1,6 @@
+#!/bin/bash -u
+
+cd "$(dirname "$0")"
+
+python parse.py steamd/steammsg.steamd
+mv steammsg.py ../vaporbat/steam/steamd.py
