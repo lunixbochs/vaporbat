@@ -9,17 +9,16 @@ class Connection:
 
     def __init__(self, host, port):
         self.key = None
-        self.old = ''
+        self.buf = ''
         self.socket = socket.socket()
         self.socket.settimeout(5)
         self.socket.connect((host, port))
         self.socket.settimeout(30)
-        self.length = 0
+        self.length = None
 
     def send(self, data):
         if self.key:
             data = encrypt(data, self.key)
-
         length = struct.pack('<I', len(data))
         self.socket.send(length + self.MAGIC + data)
 
@@ -33,24 +32,23 @@ class Connection:
     def pump(self):
         while True:
             for packet in self.recv():
-                if len(packet):
-                    yield Buffer(packet)
+                yield Buffer(packet)
 
     def parse(self, data):
-        if self.old:
-            data = self.old + data
-            self.old = ''
-        else:
-            self.length, = struct.unpack('<I', data[:4])
-            data = data[8:]
+        self.buf += data
+        if self.length is None:
+            if len(self.buf) < 8:
+                return
+            self.length, = struct.unpack('<I', self.buf[:4])
+            if self.buf[4:8] != self.MAGIC:
+                raise socket.error('invalid magic')
+            self.buf = self.buf[8:]
 
-        if len(data) < self.length:
-            self.old = data
-            yield ''
-        else:
-            packet, data = data[:self.length], data[self.length:]
-            if self.key:
-                packet = decrypt(packet, self.key)
-            if len(data):
-                self.old = data
-            yield packet
+        if len(self.buf) < self.length:
+            return
+
+        packet, self.buf = self.buf[:self.length], self.buf[self.length:]
+        self.length = None
+        if self.key:
+            packet = decrypt(packet, self.key)
+        yield packet
