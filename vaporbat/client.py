@@ -2,6 +2,7 @@ from collections import defaultdict
 import Queue
 import StringIO
 import base64
+import gzip
 import hashlib
 import random
 import requests
@@ -10,13 +11,16 @@ import struct
 import thread
 import time
 import traceback
-import zipfile
 
 import steam
 from steam import Buffer, Connection, crypto, steamd
 from steam.mapping import PROTO_MAPPING, WANTS_HEADER, EMSGS
-from steam.steamd import EClientPersonaStateFlag, EAccountType, EUniverse, EMsg, EPersonaState, EResult, EFriendRelationship, proto_mask
-from steam.protobuf import steam_server, steam_base
+from steam.steamd import (
+    EClientPersonaStateFlag, EAccountType, EUniverse, EMsg,
+    EPersonaState, EResult, EFriendRelationship, proto_mask,
+    MsgClientLogon, EOSType,
+)
+from steam.protobuf import steam_server, steam_server2, steam_base
 
 
 class SteamClient:
@@ -141,8 +145,9 @@ class SteamClient:
         d = data.read('<I')
         emsg = d & ~proto_mask
         is_proto = d & proto_mask
-        print 'on_net_msg', emsg, EMSGS.get(emsg)
+        print 'on_net_msg', emsg, EMSGS.get(emsg), is_proto
         if not EMSGS.get(emsg):
+            print 'skipping', emsg
             return []
         # TODO: use steamd on these headers
         elif emsg in (EMsg.ChannelEncryptRequest,
@@ -198,20 +203,28 @@ class SteamClient:
         if result == EResult.OK:
             self.connection.key = self._tmpkey
             logon = steam_server.CMsgClientLogon()
+            logon.obfustucated_private_ip = 0
             logon.account_name = self.username
             logon.password = self.password
-            logon.protocol_version = 65575
+            logon.should_remember_password = 0
+            logon.protocol_version = MsgClientLogon.CurrentProtocol
+            logon.client_os_type = EOSType.Win311
             if self.code:
                 logon.auth_code = self.code
+            # latest package version is required to get a sentry file
+            logon.client_package_version = 1771
             if self.sentry_hash:
                 logon.sha_sentryfile = self.sentry_hash
+                logon.eresult_sentryfile = EResult.OK
+            else:
+                logon.eresult_sentryfile = EResult.FileNotFound
             self.send(EMsg.ClientLogon | proto_mask, logon)
 
     def on_multi(self, msg):
         if msg.size_unzipped:
-            zf = StringIO.StringIO(msg.message_body)
-            zp = zipfile.ZipFile(zf)
-            payload = zp.read('z')
+            gf = StringIO.StringIO(msg.message_body)
+            gp = gzip.GzipFile(fileobj=gf)
+            payload = gp.read()
             payload = Buffer(payload)
         else:
             payload = Buffer(msg.message_body)
