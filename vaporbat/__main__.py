@@ -6,6 +6,7 @@ import sys
 
 from client import SteamClient
 from steam.steamd import EMsg, EResult
+from steam.mapping import EMSGS
 
 parser = argparse.ArgumentParser(description='Python Steam client.')
 parser.add_argument('user')
@@ -22,7 +23,22 @@ except KeyboardInterrupt:
     sys.exit(1)
 client = SteamClient()
 client.login(args.user, password, sentry_hash)
+
+blacklist = [
+    EMsg.ClientAccountInfo,
+    EMsg.ClientClanState,
+    EMsg.ClientEmailAddrInfo,
+    EMsg.ClientFriendsGroupsList,
+    EMsg.ClientFriendsList,
+    EMsg.ClientLicenseList,
+    EMsg.ClientPersonaState,
+    EMsg.ClientPlayerNicknameList,
+    EMsg.ClientServerList,
+    EMsg.ClientServersAvailable,
+]
 for emsg, msg in client.pump():
+    if not emsg in blacklist:
+        print EMSGS.get(emsg)
     if emsg == EMsg.ClientUpdateMachineAuth:
         print 'got sentry hash'
         sha1 = hashlib.sha1(msg.bytes).digest()
