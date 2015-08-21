@@ -253,7 +253,7 @@ class SteamClient:
 
     def on_sentry(self, hdr, msg):
         sha1 = hashlib.sha1(msg.bytes).digest()
-        resp = steam_server.CMsgClientUpdateMachineAuthResponse()
+        resp = steam_server2.CMsgClientUpdateMachineAuthResponse()
         resp.filename = msg.filename
         resp.eresult = EResult.OK
         resp.filesize = len(msg.bytes)
