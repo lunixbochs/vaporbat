@@ -1,11 +1,8 @@
-from collections import defaultdict
 import Queue
 import StringIO
-import base64
 import gzip
 import hashlib
 import random
-import requests
 import socket
 import struct
 import thread
