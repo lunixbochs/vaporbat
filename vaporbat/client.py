@@ -93,7 +93,6 @@ class SteamClient:
         self.persona_state = state or self.persona_state
         msg.player_name = self.persona_name
         msg.persona_state = self.persona_state
-        print msg
         self.send(EMsg.ClientChangeStatus | proto_mask, msg)
 
     def add_friend(self, friend):
@@ -142,14 +141,12 @@ class SteamClient:
         d = data.read('<I')
         emsg = d & ~proto_mask
         is_proto = d & proto_mask
-        print 'on_net_msg', emsg, EMSGS.get(emsg), is_proto
         if not EMSGS.get(emsg):
-            print 'skipping', emsg
+            print 'WARNING: skipping', emsg
             return []
         # TODO: use steamd on these headers
         elif emsg in (EMsg.ChannelEncryptRequest,
                     EMsg.ChannelEncryptResult):
-            print 'encrypt request/result', emsg
             # TODO: not going to actual implement a deserializer for a type that
             # only gets used for 2 message types, RIGHT HERE
             target = data.read('Q')
@@ -179,14 +176,7 @@ class SteamClient:
                 return [(emsg, hdr, rest)]
         return []
 
-    def on_proto(self, msg):
-        print msg
-
-    def on_other(self, data):
-        print repr(data)
-
     def on_encrypt_request(self, data):
-        print 'on_encrypt_request', data.read('<I'), data.read('<I')
         key, crypted_key, crc32 = crypto.make_session_key()
         resp = steamd.MsgChannelEncryptResponse.dumps({})
         resp += crypted_key
@@ -195,7 +185,6 @@ class SteamClient:
         self._tmpkey = key
 
     def on_encrypt_result(self, data):
-        print 'on_encrypt_result', data
         result = data.read('<I')
         if result == EResult.OK:
             self.connection.key = self._tmpkey
@@ -239,8 +228,6 @@ class SteamClient:
             self.set_persona(state=EPersonaState.Online)
         elif d.eresult == EResult.TryAnotherCM:
             self.login(self.username, self.password, self.sentry_hash, self.code)
-        else:
-            print 'unknown login response', EMSGS.get(d.eresult)
 
     def on_login_key(self, key):
         self.ready = True
@@ -264,7 +251,6 @@ class SteamClient:
         resp.otp_type = msg.otp_type
         resp.otp_value = 0
         resp.otp_identifier = msg.otp_identifier
-        print hdr.jobid_source, resp
         self.send(EMsg.ClientUpdateMachineAuthResponse | proto_mask, resp, job=hdr.jobid_source)
 
     def on_account_info(self, msg):
@@ -272,11 +258,10 @@ class SteamClient:
 
     def on_cm_list(self, msg):
         # TODO: do something with this server list
-        print 'on_cm_list'
         addrs = []
         for ip, port in zip(msg.cm_addresses, msg.cm_ports):
             addrs.append(['.'.join(map(str, reversed(struct.unpack('<BBBB', struct.pack('<I', ip))))), port])
-        print addrs
+        print 'Server list:', addrs
 
     def on_friend_list(self, friends):
         more_info = steam_server.CMsgClientRequestFriendData()
@@ -320,10 +305,10 @@ class SteamClient:
         pass
 
     def on_from_gc(self, msg):
-        print repr(msg.payload)
+        print 'From GC:', repr(msg.payload)
 
     def on_connect_token(self, msg):
-        print len(msg.tokens)
+        print 'Connect tokens:', len(msg.tokens)
         for t in msg.tokens:
             self.connect_tokens.insert(0, t)
         self.connect_tokens = self.connect_tokens[:msg.max_tokens_to_keep]
@@ -347,7 +332,6 @@ class SteamClient:
                 print '-' * 20
 
     def send(self, emsg, body, job=None, target=None):
-        print 'sending', emsg & ~proto_mask, EMSGS.get(emsg & ~proto_mask)
         if not isinstance(body, str):
             body = body.SerializeToString()
         if isinstance(job, type(lambda: 0)):
@@ -389,8 +373,4 @@ class SteamClient:
                 'sessionID': self.session_id,
             }
             header = steamd.ExtendedClientMsgHdr.dumps(hdr)
-
-        if emsg & ~ proto_mask == EMsg.ClientRequestValidationMail:
-            print repr(header + body)
-
         self.connection.send(header + body)
