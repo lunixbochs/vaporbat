@@ -1,7 +1,7 @@
 from collections import OrderedDict
 from steamid import SteamID
 
-import crypto
+import encrypt
 import requests
 
 base = 'api.steampowered.com'
@@ -18,8 +18,8 @@ def call(interface, func, version=1, data=None):
 
 def login(steamid, login_key):
     steamid = SteamID(steamid)
-    session_key, crypted_key, _ = crypto.make_session_key()
-    ticket = crypto.encrypt(login_key, session_key)
+    session_key, crypted_key, _ = encrypt.make_session_key()
+    ticket = encrypt.encrypt(login_key, session_key)
     key = call('ISteamUserAuth', 'AuthenticateUser', data={
         'steamid': steamid.id,
         'sessionkey': crypted_key,

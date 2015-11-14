@@ -1,5 +1,5 @@
 from buffer import Buffer
-from crypto import encrypt, decrypt
+from encrypt import encrypt, decrypt
 
 import socket
 import struct
