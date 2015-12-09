@@ -10,7 +10,7 @@ import time
 import traceback
 
 import steam
-from steam import Buffer, Connection, crypto, steamd
+from steam import Buffer, Connection, encrypt, steamd
 from steam.mapping import PROTO_MAPPING, WANTS_HEADER, EMSGS
 from steam.steamd import (
     EClientPersonaStateFlag, EAccountType, EUniverse, EMsg,
@@ -177,7 +177,7 @@ class SteamClient:
         return []
 
     def on_encrypt_request(self, data):
-        key, crypted_key, crc32 = crypto.make_session_key()
+        key, crypted_key, crc32 = encrypt.make_session_key()
         resp = steamd.MsgChannelEncryptResponse.dumps({})
         resp += crypted_key
         resp += struct.pack('<i', crc32)
